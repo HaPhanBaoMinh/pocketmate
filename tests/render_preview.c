@@ -20,6 +20,7 @@ int main(int argc, char **argv)
         else if (!strcmp(scenario, "uturn")) strcpy(m.message, "Quay đầu tại Nguyễn Thị Minh Khai sau 350 m");
         else if (!strcmp(scenario, "slight")) strcpy(m.message, "Rẽ nhẹ sang phải vào Trường Sơn");
         else if (!strcmp(scenario, "arrive")) strcpy(m.message, "Điểm đến ở bên trái, 50 m");
+        else if (!strcmp(scenario, "next")) strcpy(m.message, "Sau 500 m, rẽ phải vào Đinh Bộ Lĩnh, sau đó rẽ trái vào Bạch Đằng");
         else if (!strcmp(scenario, "roundabout")) strcpy(m.message, "Tại vòng xuyến, đi theo lối ra thứ 2 vào Phạm Văn Đồng");
         else strcpy(m.message, "Tiếp tục đi thẳng 1,2 km rồi rẽ trái vào Điện Biên Phủ. Đến nơi lúc 14:32.");
         if (!strcmp(scenario, "stale")) { m.stale = true; m.age_seconds = 47; }

@@ -27,3 +27,7 @@ void ui_render_band(const ui_model_t *model, gfx_band_t *band);
 /* Vietnamese Google Maps instruction text -> maneuver; distance like "200 m"/"1,2 km" copied
  * into `distance` (may be empty). Pure function, exposed for tests. */
 maneuver_t ui_parse_instruction(const char *message, char *distance, size_t distance_capacity);
+/* Splits "…, sau đó rẽ trái…" / "…rồi rẽ trái…" into the current step and the following one.
+ * `next` receives the text after the connector (may be empty). Returns the length of the
+ * current step in bytes. */
+size_t ui_split_next(const char *message, const char **next);

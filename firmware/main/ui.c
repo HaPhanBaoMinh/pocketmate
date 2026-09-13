@@ -84,6 +84,57 @@ maneuver_t ui_parse_instruction(const char *m, char *distance, size_t cap)
     return MANEUVER_NONE;
 }
 
+/* Copies `in` to `out` without the "sau 500 m, " / ", sau 500 m" / "500 m " clause,
+ * since the distance is drawn separately. */
+static void strip_distance(const char *in, char *out, size_t cap)
+{
+    const char *p = in;
+    for (; *p; p++) {
+        if (!isdigit((unsigned char)*p) || (p > in && isalnum((unsigned char)p[-1]))) continue;
+        const char *q = p;
+        while (isdigit((unsigned char)*q) || *q == ',' || *q == '.') q++;
+        const char *unit = q;
+        while (*unit == ' ') unit++;
+        size_t ulen = 0;
+        if ((unit[0] | 0x20) == 'k' && (unit[1] | 0x20) == 'm') ulen = 2;
+        else if ((unit[0] | 0x20) == 'm') ulen = 1;
+        if (!ulen || isalpha((unsigned char)unit[ulen])) continue;
+        const char *start = p, *end = unit + ulen;
+        /* Extend backwards over "sau " / "Sau " and a preceding ", ". */
+        if (start - in >= 4 && (start[-4] | 0x20) == 's' && start[-3] == 'a' && start[-2] == 'u' && start[-1] == ' ') start -= 4;
+        while (start > in && (start[-1] == ' ' || start[-1] == ',')) start--;
+        /* Extend forwards over ", " / " ". */
+        while (*end == ',' || *end == ' ') end++;
+        size_t head = (size_t)(start - in);
+        if (head >= cap) head = cap - 1;
+        memcpy(out, in, head);
+        size_t tail = strlen(end);
+        if (head + tail >= cap) tail = cap - 1 - head;
+        if (head && tail) { out[head] = ' '; if (head + 1 + tail >= cap) tail = cap - 2 - head; memcpy(out + head + 1, end, tail); out[head + 1 + tail] = 0; }
+        else { memcpy(out + head, end, tail); out[head + tail] = 0; }
+        if (out[0] >= 'a' && out[0] <= 'z') out[0] = (char)toupper((unsigned char)out[0]);
+        else if ((unsigned char)out[0] == 0xc4 && (unsigned char)out[1] == 0x91) out[1] = (char)0x90; /* đ -> Đ */
+        return;
+    }
+    snprintf(out, cap, "%s", in);
+}
+
+size_t ui_split_next(const char *m, const char **next)
+{
+    static const char *const connectors[] = {", sau đó ", ". sau đó ", " sau đó ", " rồi ", " và sau đó "};
+    *next = "";
+    if (!m) return 0;
+    for (size_t i = 0; i < sizeof(connectors) / sizeof(connectors[0]); i++) {
+        size_t n = strlen(connectors[i]);
+        for (const char *p = m; *p; p++) {
+            size_t k = 0;
+            while (k < n && p[k] && low(p + k, (unsigned char)p[k]) == (unsigned char)connectors[i][k]) k++;
+            if (k == n) { *next = p + n; return (size_t)(p - m); }
+        }
+    }
+    return strlen(m);
+}
+
 /* Arrow inside a box centred at (cx, cy) of half-size `r`; line thickness t. */
 static void arrow_head(gfx_band_t *b, int x, int y, int dx, int dy, int size, uint16_t c)
 {
@@ -165,25 +216,77 @@ void ui_render_band(const ui_model_t *m, gfx_band_t *band)
         return;
     }
     int bottom = m->stale ? GFX_HEIGHT - BAR_H : GFX_HEIGHT;
-    char distance[24];
-    maneuver_t maneuver = ui_parse_instruction(m->message, distance, sizeof(distance));
-    /* Google Maps uses a generic title ("Hướng dẫn điều hướng"); only show a specific one. */
+    /* Current step vs. the following one ("…, sau đó …"). */
+    const char *next_text;
+    size_t current_len = ui_split_next(m->message, &next_text);
+    char current[ANCS_MESSAGE_MAX + 1];
+    if (current_len >= sizeof(current)) current_len = sizeof(current) - 1;
+    memcpy(current, m->message, current_len);
+    current[current_len] = 0;
+    while (current_len && (current[current_len - 1] == ' ' || current[current_len - 1] == '.' || current[current_len - 1] == ','))
+        current[--current_len] = 0;
+
+    char distance[24], next_distance[24];
+    maneuver_t maneuver = ui_parse_instruction(current, distance, sizeof(distance));
+    maneuver_t next = next_text[0] ? ui_parse_instruction(next_text, next_distance, sizeof(next_distance)) : MANEUVER_NONE;
     bool generic_title = !m->title[0] || has(m->title, "điều hướng") || has(m->title, "navigation");
-    int y = BAR_H + 4;
+    int y = BAR_H + 6;
+    /* Left column: arrow with the distance under it, like the Google Maps card. */
+    int text_x = MARGIN;
     if (maneuver != MANEUVER_NONE) {
-        draw_maneuver(band, maneuver, distance[0] ? 60 : GFX_WIDTH / 2, y + 52, 44);
+        draw_maneuver(band, maneuver, 44, y + 36, 32);
+        text_x = 92;
         if (distance[0]) {
-            const gfx_font_t *f = gfx_text_width(&font_large, distance) <= GFX_WIDTH - 112 - MARGIN ? &font_large : &font_medium;
-            gfx_text(band, f, 112, y + 24 + (f == &font_large ? 0 : 10), C_ACCENT, distance);
+            const gfx_font_t *f = gfx_text_width(&font_medium, distance) <= 84 ? &font_medium : &font_small;
+            gfx_text(band, f, 8, y + 78, C_ACCENT, distance);
         }
-        y += 108;
     } else if (distance[0]) {
-        centered(band, &font_large, y, C_ACCENT, distance);
-        y += font_large.line_height + 4;
+        gfx_text(band, &font_medium, MARGIN, y, C_ACCENT, distance);
+        y += font_medium.line_height;
     }
-    if (!generic_title) y = paragraph(band, &font_small, y, C_DIM, m->title, 1) + 2;
-    if (m->message[0]) y = paragraph(band, &font_medium, y, C_TEXT, m->message, (bottom - y) / font_medium.line_height);
-    if (m->subtitle[0]) y = paragraph(band, &font_small, y, C_DIM, m->subtitle, (bottom - y) / font_small.line_height);
+    if (!generic_title) { gfx_text(band, &font_small, text_x, y, C_DIM, m->title); y += font_small.line_height; }
+    /* Instruction text: beside the arrow first, then full width once below it. */
+    {
+        char shown[ANCS_MESSAGE_MAX + 1];
+        strip_distance(current, shown, sizeof(shown));
+        int arrow_bottom = BAR_H + 6 + 112;
+        const char *rest = shown;
+        while (*rest && y < bottom) {
+            bool beside = maneuver != MANEUVER_NONE && y + font_medium.line_height <= arrow_bottom;
+            int x = beside ? text_x : MARGIN;
+            gfx_line_t line;
+            if (!gfx_wrap(&font_medium, rest, GFX_WIDTH - x - MARGIN, &line, 1)) break;
+            char buf[ANCS_MESSAGE_MAX + 1];
+            size_t len = line.length < sizeof(buf) - 1 ? line.length : sizeof(buf) - 1;
+            memcpy(buf, line.start, len); buf[len] = 0;
+            gfx_text(band, &font_medium, x, y, C_TEXT, buf);
+            y += font_medium.line_height;
+            rest = line.start + line.length;
+            if (!beside && y < arrow_bottom) y = arrow_bottom;
+        }
+        if (maneuver != MANEUVER_NONE && y < arrow_bottom) y = arrow_bottom;
+    }
+    if (m->subtitle[0]) y = paragraph(band, &font_small, y, C_DIM, m->subtitle, 1);
+    if (next_text[0]) {
+        /* "Sau đó" row: small arrow plus the next instruction, at the bottom of the free area. */
+        int row_h = 58;
+        int ry = bottom - row_h;
+        if (ry > y + 4) {
+            gfx_fill(band, 0, ry, GFX_WIDTH, 1, GFX_RGB(70, 70, 70));
+            gfx_text(band, &font_small, MARGIN, ry + 6, C_DIM, "Sau đó");
+            if (next != MANEUVER_NONE) draw_maneuver(band, next, 98, ry + 30, 18);
+            char nbuf[ANCS_MESSAGE_MAX + 1];
+            strip_distance(next_text, nbuf, sizeof(nbuf));
+            gfx_line_t nl[2];
+            int n = gfx_wrap(&font_small, nbuf, GFX_WIDTH - 124 - MARGIN, nl, 2);
+            for (int i = 0; i < n; i++) {
+                char buf[ANCS_MESSAGE_MAX + 1];
+                size_t len = nl[i].length < sizeof(buf) - 1 ? nl[i].length : sizeof(buf) - 1;
+                memcpy(buf, nl[i].start, len); buf[len] = 0;
+                gfx_text(band, &font_small, 124, ry + 8 + i * font_small.line_height, C_TEXT, buf);
+            }
+        }
+    }
     if (m->stale) {
         char line[48];
         snprintf(line, sizeof(line), "Chưa cập nhật %lus", (unsigned long)m->age_seconds);
