@@ -40,6 +40,20 @@ tools/idf.sh -p <cổng> flash      # nạp
 ~/.espressif/python_env/idf5.5_py3.12_env/bin/python tools/serial_monitor.py --port <cổng> --seconds 60
 ```
 
+## Vì sao iPhone không thấy Pocketmate trong Cài đặt → Bluetooth (13/09/2026)
+
+Bản đầu chỉ quảng bá "service solicitation" ANCS. Laptop Linux thấy và kết nối được (log USB ghi
+`connected` → `paired` → không tìm thấy ANCS → ngắt 0x13, đúng dấu hiệu của máy tính, không phải
+iPhone), nhưng iPhone 11 iOS 18.1.1 không liệt kê thiết bị. iOS chỉ hiện các thiết bị BLE nó nhận
+dạng được; ví dụ `ble_ancs` chính thức của Espressif quảng bá thêm UUID dịch vụ HID (0x1812) và
+appearance Generic HID để được liệt kê. Firmware nay làm giống vậy (không cài đặt dịch vụ HID thật).
+Đồng thời đã xóa Pocketmate khỏi bộ nhớ Bluetooth của laptop để laptop không tự kết nối lại và
+chiếm kết nối.
+
+Khi thử với điện thoại, đừng bấm kết nối từ laptop: bo chỉ nhận một kết nối, laptop chiếm chỗ thì
+iPhone không thấy. Log USB ghi địa chỉ và loại địa chỉ của thiết bị kết nối (public = máy tính,
+random = điện thoại) và kiểu ghép nối (có passkey hay Just Works) để phân biệt.
+
 ## Quy trình thử với iPhone
 
 1. Bo hiện "Chờ iPhone: Bluetooth > Pocketmate". Trên iPhone: Cài đặt → Bluetooth → chọn **Pocketmate**.

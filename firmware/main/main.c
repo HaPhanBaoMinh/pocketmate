@@ -28,10 +28,14 @@ static const uint8_t ancs_uuid[16] = {0xd0,0x00,0x2d,0x12,0x1e,0x4b,0x0f,0xa4,0x
 static const uint8_t ns_uuid[16] = {0xbd,0x1d,0xa2,0x99,0xe6,0x25,0x58,0x8c,0xd9,0x42,0x01,0x63,0x0d,0x12,0xbf,0x9f};
 static const uint8_t ds_uuid[16] = {0xfb,0x7b,0x7c,0xce,0x6a,0xb3,0x44,0xbe,0xb5,0x4b,0xd6,0x24,0xe9,0xc6,0xea,0x22};
 static const uint8_t cp_uuid[16] = {0xd9,0xd9,0xaa,0xfd,0xbd,0x9b,0x21,0x98,0xa8,0x49,0xe1,0x45,0xf3,0xd8,0xd1,0x69};
-/* ANCS service solicitation, not a claim to implement a keyboard/HID. */
+/* Flags, ANCS service solicitation, then the HID service UUID (0x1812) and Generic HID
+ * appearance. iOS Settings > Bluetooth only lists LE peripherals it recognises, and
+ * solicitation alone was not enough on iOS 18; Espressif's ble_ancs example advertises
+ * HID for the same reason. No HID GATT service is implemented. */
 static uint8_t adv_data[] = {2,0x01,0x06,17,0x15,
     0xd0,0x00,0x2d,0x12,0x1e,0x4b,0x0f,0xa4,0x99,0x4e,0xce,0xb5,0x31,0xf4,0x05,0x79,
-    3,0x19,0x40,0x00};
+    3,0x03,0x12,0x18,
+    3,0x19,0xc0,0x03};
 static esp_ble_adv_params_t adv_params = {
     .adv_int_min=0x100, .adv_int_max=0x100, .adv_type=ADV_TYPE_IND,
     .own_addr_type=BLE_ADDR_TYPE_PUBLIC, .channel_map=ADV_CHNL_ALL,
@@ -313,6 +317,8 @@ static void handle_gap(int event, esp_ble_gap_cb_param_t *p)
             break;
         }
         authenticated=true;
+        ESP_LOGI(TAG,"pairing auth_mode=0x%x (MITM %s)",p->ble_security.auth_cmpl.auth_mode,
+                 (p->ble_security.auth_cmpl.auth_mode & ESP_LE_AUTH_REQ_MITM) ? "yes: passkey was used" : "no: Just Works, peer had no keyboard");
         state("paired: allow Share System Notifications on iPhone");
         screen("Đã ghép nối, bật Chia sẻ thông báo");
         discover();
@@ -342,6 +348,9 @@ static void handle_gatt(int event, esp_gatt_if_t gatt_if, esp_ble_gattc_cb_param
         memcpy(peer,p->connect.remote_bda,sizeof(peer));
         phase_deadline=esp_timer_get_time()+90000000;
         state("connected");
+        /* iPhones use random (resolvable) addresses; a laptop usually shows a public one. */
+        ESP_LOGI(TAG,"peer %02x:%02x:%02x:%02x:%02x:%02x addr_type=%d (%s)",peer[0],peer[1],peer[2],peer[3],peer[4],peer[5],
+                 p->connect.ble_addr_type,p->connect.ble_addr_type==BLE_ADDR_TYPE_PUBLIC ? "public: likely a computer" : "random: likely a phone");
         screen("Đang kết nối iPhone…");
         esp_ble_gatt_creat_conn_params_t args={0};
         memcpy(args.remote_bda,peer,sizeof(peer));
