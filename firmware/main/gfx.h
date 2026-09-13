@@ -40,3 +40,8 @@ typedef struct { const char *start; size_t length; } gfx_line_t;
 int gfx_wrap(const gfx_font_t *font, const char *utf8, int max_width, gfx_line_t *lines, int max_lines);
 /* Decodes one UTF-8 code point; invalid bytes decode as U+FFFD and consume 1 byte. */
 uint32_t gfx_utf8_next(const char **cursor);
+
+/* Filled triangle, clipped to the band. */
+void gfx_triangle(gfx_band_t *band, int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color);
+/* Thick line segment drawn as a quad (two triangles). */
+void gfx_thick_line(gfx_band_t *band, int x0, int y0, int x1, int y1, int thickness, uint16_t color);

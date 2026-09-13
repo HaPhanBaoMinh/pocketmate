@@ -1,6 +1,6 @@
 # Bản thử ANCS + màn hình (iPhone, không cần app)
 
-Cập nhật: 13/09/2026. Trạng thái: firmware chạy trên bo, chờ ghép nối iPhone thật.
+Cập nhật: 13/09/2026 11:45. Trạng thái: **đã nhận được chỉ dẫn Google Maps thật qua ANCS** và hiện lên LCD.
 
 ## Mục tiêu bước này
 
@@ -65,9 +65,32 @@ random = điện thoại) và kiểu ghép nối (có passkey hay Just Works) đ
    nếu Maps không phát thông báo có nội dung rẽ/khoảng cách, hướng ANCS không đủ và phải quay lại
    phương án app + chia sẻ màn hình.
 
+## Kết quả thử thật (13/09/2026)
+
+iPhone 11 iOS 18.1.1 ghép nối bằng passkey hiện trên LCD, iOS tự kết nối lại sau mỗi lần nạp
+firmware (bond giữ trong NVS ở 0xF00000). Điều kiện để Google Maps gửi chỉ dẫn:
+
+- Cài đặt → Bluetooth → Pocketmate (i) → bật Chia sẻ thông báo hệ thống.
+- Trong app Google Maps → ảnh đại diện → Cài đặt → Thông báo → bật "Chỉ đường từng chặng khi lái xe".
+- Bắt đầu chỉ đường chế độ ô tô rồi đưa Maps xuống nền (về màn hình chính hoặc khóa máy).
+
+Thông báo đầu tiên nhận được (nhóm ANCS 10 = Location):
+
+```
+MAPS {"app":"com.google.Maps","uid":2,"event":"added","title":"Hướng dẫn điều hướng","subtitle":"","message":"Rẽ phải vào Đinh Bộ Lĩnh"}
+MAPS {"event":"removed","uid":2}      (18 giây sau; Maps xóa rồi đăng lại theo từng chặng)
+```
+
+Tiêu đề luôn chung chung nên LCD ẩn nó; `ui_parse_instruction` đọc từ khóa tiếng Việt trong
+message (rẽ trái/phải, đi thẳng, quay đầu, vòng xuyến, điểm đến, rẽ nhẹ) để vẽ mũi tên và tách
+khoảng cách dạng "200 m"/"1,2 km" nếu có. Cần thu thêm mẫu message thật khi đi đường để hoàn
+thiện bộ từ khóa; mọi mẫu đều nằm trong USB log dưới dạng dòng `MAPS {...}`.
+
+Giữ nút BOOT khoảng 1 giây bật/tắt chế độ test hiện nội dung thông báo từ mọi app (mặc định tắt).
+
 ## Điều chưa làm
 
-- Chưa có iPhone ghép nối thật, nên chưa biết Maps gửi những gì qua ANCS.
-- Chưa vẽ mũi tên/khoảng cách riêng; hiện đang hiển thị nguyên văn tiêu đề và nội dung thông báo.
+- Mới có một mẫu message thật; bộ từ khóa mũi tên và khoảng cách cần đối chiếu thêm khi đi đường.
+- Chưa xử lý tình huống Maps hiện dùng Live Activity thay thông báo (chưa gặp trên máy này).
 - Chưa dùng cảm ứng, loa, LED, thẻ nhớ.
 - Font 1-bit chưa khử răng cưa; kích thước chữ có thể cần chỉnh sau khi thử ngoài trời.

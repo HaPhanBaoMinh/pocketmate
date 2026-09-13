@@ -122,3 +122,37 @@ int gfx_wrap(const gfx_font_t *font, const char *utf8, int max_width, gfx_line_t
     }
     return count;
 }
+
+static void swap_int(int *a, int *b) { int t = *a; *a = *b; *b = t; }
+
+void gfx_triangle(gfx_band_t *band, int x0, int y0, int x1, int y1, int x2, int y2, uint16_t color)
+{
+    if (!band) return;
+    if (y0 > y1) { swap_int(&x0, &x1); swap_int(&y0, &y1); }
+    if (y0 > y2) { swap_int(&x0, &x2); swap_int(&y0, &y2); }
+    if (y1 > y2) { swap_int(&x1, &x2); swap_int(&y1, &y2); }
+    int top = y0 < band->y0 ? band->y0 : y0;
+    int bottom = y2 >= band->y0 + band->rows ? band->y0 + band->rows - 1 : y2;
+    for (int y = top; y <= bottom; y++) {
+        /* Long edge y0..y2 and the short edge that contains y. */
+        int xa = y2 == y0 ? x0 : x0 + (x2 - x0) * (y - y0) / (y2 - y0);
+        int xb;
+        if (y < y1) xb = y1 == y0 ? x1 : x0 + (x1 - x0) * (y - y0) / (y1 - y0);
+        else xb = y2 == y1 ? x2 : x1 + (x2 - x1) * (y - y1) / (y2 - y1);
+        if (xa > xb) swap_int(&xa, &xb);
+        gfx_fill(band, xa, y, xb - xa + 1, 1, color);
+    }
+}
+
+void gfx_thick_line(gfx_band_t *band, int x0, int y0, int x1, int y1, int thickness, uint16_t color)
+{
+    int dx = x1 - x0, dy = y1 - y0;
+    /* Perpendicular offset, integer approximation of thickness/2 along the normal. */
+    int len2 = dx * dx + dy * dy;
+    if (!len2) { gfx_fill(band, x0 - thickness / 2, y0 - thickness / 2, thickness, thickness, color); return; }
+    int len = 1;
+    while (len * len < len2) len++;
+    int nx = -dy * thickness / (2 * len), ny = dx * thickness / (2 * len);
+    gfx_triangle(band, x0 + nx, y0 + ny, x0 - nx, y0 - ny, x1 + nx, y1 + ny, color);
+    gfx_triangle(band, x0 - nx, y0 - ny, x1 - nx, y1 - ny, x1 + nx, y1 + ny, color);
+}

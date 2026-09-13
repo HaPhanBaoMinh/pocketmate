@@ -5,6 +5,11 @@
 #include "gfx.h"
 #include "ancs_protocol.h"
 
+typedef enum {
+    MANEUVER_NONE, MANEUVER_STRAIGHT, MANEUVER_LEFT, MANEUVER_RIGHT, MANEUVER_SLIGHT_LEFT,
+    MANEUVER_SLIGHT_RIGHT, MANEUVER_UTURN, MANEUVER_ROUNDABOUT, MANEUVER_ARRIVE,
+} maneuver_t;
+
 typedef struct {
     char status[48];                 /* one line in the top bar */
     char passkey[8];                 /* six digits while the iPhone asks for a pairing code */
@@ -19,3 +24,6 @@ typedef struct {
 } ui_model_t;
 
 void ui_render_band(const ui_model_t *model, gfx_band_t *band);
+/* Vietnamese Google Maps instruction text -> maneuver; distance like "200 m"/"1,2 km" copied
+ * into `distance` (may be empty). Pure function, exposed for tests. */
+maneuver_t ui_parse_instruction(const char *message, char *distance, size_t distance_capacity);
