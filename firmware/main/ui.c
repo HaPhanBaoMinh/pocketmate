@@ -53,6 +53,7 @@ void ui_render_band(const ui_model_t *m, gfx_band_t *band)
             char line[48];
             snprintf(line, sizeof(line), "Thông báo app khác: %u", m->other_count);
             centered(band, &font_small, 190, C_DIM, line);
+            if (m->other_app[0]) centered(band, &font_small, 214, C_DIM, m->other_app);
         }
         return;
     }

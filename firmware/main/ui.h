@@ -12,6 +12,7 @@ typedef struct {
     bool stale;                      /* link lost after the last Maps update */
     uint32_t age_seconds;            /* seconds since the last Maps update */
     unsigned other_count;            /* notifications from other apps (content never fetched) */
+    char other_app[64];              /* bundle id of the last such notification */
     char title[ANCS_TITLE_MAX + 1];
     char subtitle[ANCS_TITLE_MAX + 1];
     char message[ANCS_MESSAGE_MAX + 1];

@@ -20,6 +20,7 @@
 #include "cJSON.h"
 #include "ancs_protocol.h"
 #include "display.h"
+#include "driver/gpio.h"
 
 #define TAG "POCKETMATE"
 #define NAME "Pocketmate"
@@ -65,6 +66,12 @@ static bool busy, text_phase, canceled, write_done, response_done;
 static ancs_response_t response;
 static uint32_t maps_uids[16];
 static size_t maps_count;
+static char current_app[256];
+/* Test mode: hold BOOT (GPIO0) ~1 s to toggle showing text from any app, for
+ * checking the display path when Google Maps is silent. Off by default. */
+static bool show_all;
+static int64_t boot_pressed_at;
+static bool boot_handled;
 
 static ui_model_t ui;
 static bool ui_dirty;
@@ -207,14 +214,14 @@ static void print_notification(void)
         !ancs_response_text(&response,ANCS_MESSAGE,body,sizeof(body))) return;
     cJSON *obj=cJSON_CreateObject();
     if (!obj) return;
-    cJSON_AddStringToObject(obj,"app","com.google.Maps");
+    cJSON_AddStringToObject(obj,"app",current_app);
     cJSON_AddNumberToObject(obj,"uid",current.uid);
     cJSON_AddStringToObject(obj,"event",current.event==ANCS_ADDED ? "added" : "modified");
     cJSON_AddStringToObject(obj,"title",title);
     cJSON_AddStringToObject(obj,"subtitle",subtitle);
     cJSON_AddStringToObject(obj,"message",body);
     char *json=cJSON_PrintUnformatted(obj);
-    if (json) { printf("MAPS %s\n",json); cJSON_free(json); }
+    if (json) { printf("%s %s\n",strcmp(current_app,"com.google.Maps")==0 ? "MAPS" : "NOTIF",json); cJSON_free(json); }
     cJSON_Delete(obj);
     snprintf(ui.title,sizeof(ui.title),"%s",title);
     snprintf(ui.subtitle,sizeof(ui.subtitle),"%s",subtitle);
@@ -236,12 +243,18 @@ static void finish_response(void)
     if (!busy || !write_done || !response_done) return;
     if (!canceled && !text_phase) {
         char app[256];
-        if (ancs_response_text(&response,ANCS_APP,app,sizeof(app)) && strcmp(app,"com.google.Maps")==0) {
+        if (!ancs_response_text(&response,ANCS_APP,app,sizeof(app))) app[0]=0;
+        snprintf(current_app,sizeof(current_app),"%s",app);
+        if (strcmp(app,"com.google.Maps")==0 || show_all) {
             request(true); return;
         }
-        /* Don't fetch or log titles/messages from unrelated apps. */
-        ESP_LOGI(TAG,"ANCS uid=%" PRIu32 " received (other app, text not requested)",current.uid);
-        if (current.event==ANCS_ADDED) { ui.other_count++; ui_dirty=true; }
+        /* Log the bundle id only; titles/messages of unrelated apps are never fetched. */
+        ESP_LOGI(TAG,"ANCS uid=%" PRIu32 " category=%u app=%s (text not requested)",current.uid,current.category,app);
+        if (current.event==ANCS_ADDED) {
+            ui.other_count++;
+            snprintf(ui.other_app,sizeof(ui.other_app),"%.63s",app);
+            ui_dirty=true;
+        }
     } else if (!canceled) print_notification();
     busy=false;
     request_deadline=0;
@@ -452,6 +465,15 @@ static void tick(void)
     if (busy && request_deadline && now>request_deadline) abort_link("ANCS response timeout");
     if (connected && phase_deadline && now>phase_deadline) abort_link("pairing/discovery timeout");
     if (retry_at && now>retry_at) discover();
+    if (gpio_get_level(GPIO_NUM_0)==0) {
+        if (!boot_pressed_at) boot_pressed_at=now;
+        else if (!boot_handled && now-boot_pressed_at>1000000) {
+            boot_handled=true;
+            show_all=!show_all;
+            ESP_LOGI(TAG,"TEST MODE %s: %s",show_all ? "ON" : "OFF",show_all ? "text from any app will be shown" : "only Google Maps");
+            screen(show_all ? "TEST: hiện mọi thông báo" : ui.has_maps ? "Pocketmate · đã kết nối" : "Chỉ hiện Google Maps");
+        }
+    } else { boot_pressed_at=0; boot_handled=false; }
     refresh_screen();
 }
 void app_main(void)
@@ -459,6 +481,8 @@ void app_main(void)
     state("boot: ANCS probe with ILI9341 status screen");
     esp_err_t lcd=display_init();
     if (lcd != ESP_OK) ESP_LOGE(TAG,"display init failed: %s (continuing without LCD)",esp_err_to_name(lcd));
+    gpio_config_t boot_btn={.pin_bit_mask=1ULL<<GPIO_NUM_0,.mode=GPIO_MODE_INPUT,.pull_up_en=GPIO_PULLUP_ENABLE};
+    gpio_config(&boot_btn);
     screen("Khởi động…");
     refresh_screen();
     esp_err_t result=nvs_flash_init();
