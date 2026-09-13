@@ -1,0 +1,13 @@
+# Local builds, tools, firmware backups and captured notifications
+build/
+sdkconfig
+sdkconfig.old
+.venv/
+__pycache__/
+*.pyc
+backups/
+captures/
+*.bin
+*.elf
+*.map
+*.log

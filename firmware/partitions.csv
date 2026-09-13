@@ -1,0 +1,5 @@
+# New prototype data lives at the end of flash, separate from factory NVS.
+# Name, Type, SubType, Offset, Size
+factory, app, factory, 0x10000, 2M
+nvs, data, nvs, 0xf00000, 0x6000
+phy_init, data, phy, 0xf06000, 0x1000
